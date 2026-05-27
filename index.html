@@ -74,8 +74,98 @@
       width: 100%;
       aspect-ratio: 1 / 1;
       border-radius: 18px;
-      transition: transform 0.15s ease, opacity 0.2s ease;
+      transition: transform 0.18s ease, opacity 0.2s ease;
       box-shadow: inset 0 -4px rgba(0,0,0,0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      font-weight: bold;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .tile::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(rgba(255,255,255,0.35), transparent);
+      border-radius: inherit;
+      pointer-events: none;
+    }
+
+    .tile.pop {
+      animation: pop 0.22s ease;
+    }
+
+    .tile.fall {
+      animation: fall 0.28s ease-out;
+    }
+
+    .tile.explode {
+      animation: explode 0.3s ease forwards;
+    }
+
+    .rocket {
+      border: 3px solid rgba(255,255,255,0.9);
+      box-shadow: 0 0 16px rgba(255,255,255,0.8);
+      z-index: 2;
+    }
+
+    .bomb {
+      border: 3px solid rgba(255,255,255,0.9);
+      box-shadow: 0 0 18px rgba(255,180,80,0.8);
+      z-index: 2;
+    }
+
+    .disco {
+      border: 3px solid white;
+      box-shadow: 0 0 22px rgba(255,255,255,1);
+      z-index: 2;
+    }
+
+    .rocket {
+      animation: pulse 1s infinite;
+    }
+
+    .bomb {
+      animation: wobble 1s infinite;
+    }
+
+    .disco {
+      animation: rainbow 1s linear infinite;
+    }
+
+    @keyframes pop {
+      0% { transform: scale(0.6); }
+      60% { transform: scale(1.15); }
+      100% { transform: scale(1); }
+    }
+
+    @keyframes explode {
+      0% { transform: scale(1); opacity: 1; }
+      100% { transform: scale(1.6); opacity: 0; }
+    }
+
+    @keyframes fall {
+      0% { transform: translateY(-80px); }
+      100% { transform: translateY(0); }
+    }
+
+    @keyframes pulse {
+      0%,100% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+    }
+
+    @keyframes wobble {
+      0%,100% { transform: rotate(0deg); }
+      25% { transform: rotate(-6deg); }
+      75% { transform: rotate(6deg); }
+    }
+
+    @keyframes rainbow {
+      0% { filter: hue-rotate(0deg); }
+      100% { filter: hue-rotate(360deg); }
     }
 
     .tile.selected {
@@ -206,6 +296,22 @@
     function selectTile(tile) {
       if (busy || moves <= 0) return;
 
+      if (tile.dataset.power) {
+        moves--;
+        updateUI();
+        busy = true;
+
+        tile.classList.add('selected');
+
+        setTimeout(() => {
+          activatePower(tile);
+          tile.classList.remove('selected');
+          processMatches();
+        }, 180);
+
+        return;
+      }
+
       if (!selectedTile) {
         selectedTile = tile;
         tile.classList.add('selected');
@@ -284,7 +390,7 @@
 
     function setTileData(tile, color, power='') {
       colors.forEach(c => tile.classList.remove(c));
-      tile.classList.remove('rocket', 'bomb');
+      tile.classList.remove('rocket', 'bomb', 'disco');
 
       tile.dataset.color = color;
       tile.dataset.power = power;
@@ -296,6 +402,7 @@
 
       if (power === 'rocket') tile.textContent = '🚀';
       if (power === 'bomb') tile.textContent = '💣';
+      if (power === 'disco') tile.textContent = '🌈';
     }
 
     function findMatches() {
@@ -323,7 +430,8 @@
               matches.push(...arr);
 
               if (streak === 4) specials.push({ index: start + 1, type: 'rocket' });
-              if (streak >= 5) specials.push({ index: start + 2, type: 'bomb' });
+              if (streak === 5) specials.push({ index: start + 2, type: 'bomb' });
+              if (streak >= 6) specials.push({ index: start + 2, type: 'disco' });
             }
 
             streak = 1;
@@ -341,7 +449,8 @@
           matches.push(...arr);
 
           if (streak === 4) specials.push({ index: start + 1, type: 'rocket' });
-          if (streak >= 5) specials.push({ index: start + 2, type: 'bomb' });
+              if (streak === 5) specials.push({ index: start + 2, type: 'bomb' });
+              if (streak >= 6) specials.push({ index: start + 2, type: 'disco' });
         }
       }
 
@@ -366,7 +475,8 @@
               matches.push(...arr);
 
               if (streak === 4) specials.push({ index: start + width, type: 'rocket' });
-              if (streak >= 5) specials.push({ index: start + width * 2, type: 'bomb' });
+              if (streak === 5) specials.push({ index: start + width * 2, type: 'bomb' });
+              if (streak >= 6) specials.push({ index: start + width * 2, type: 'disco' });
             }
 
             streak = 1;
@@ -384,7 +494,8 @@
           matches.push(...arr);
 
           if (streak === 4) specials.push({ index: start + width, type: 'rocket' });
-          if (streak >= 5) specials.push({ index: start + width * 2, type: 'bomb' });
+              if (streak === 5) specials.push({ index: start + width * 2, type: 'bomb' });
+              if (streak >= 6) specials.push({ index: start + width * 2, type: 'disco' });
         }
       }
 
@@ -395,6 +506,8 @@
     }
 
     function activatePower(tile) {
+      tile.classList.add('explode');
+
       const power = tile.dataset.power;
       const index = Number(tile.dataset.id);
 
@@ -404,21 +517,51 @@
         const row = Math.floor(index / width);
 
         for (let col = 0; col < width; col++) {
-          clearTile(row * width + col);
+          const target = row * width + col;
+
+          setTimeout(() => {
+            clearTile(target);
+          }, col * 40);
         }
+      }
       }
 
       if (power === 'bomb') {
         const row = Math.floor(index / width);
         const col = index % width;
 
+        let delay = 0;
+
         for (let r = row - 1; r <= row + 1; r++) {
           for (let c = col - 1; c <= col + 1; c++) {
             if (r >= 0 && r < width && c >= 0 && c < width) {
-              clearTile(r * width + c);
+              const target = r * width + c;
+
+              setTimeout(() => {
+                clearTile(target);
+              }, delay);
+
+              delay += 35;
             }
           }
         }
+      }
+
+      if (power === 'disco') {
+        const targetColor = randomColor();
+
+        tiles.forEach((t, i) => {
+          if (t.dataset.color === targetColor) {
+            setTimeout(() => {
+              t.classList.add('explode');
+
+              setTimeout(() => {
+                clearTile(i);
+                t.classList.remove('explode');
+              }, 180);
+            }, i * 18);
+          }
+        });
       }
 
       tile.dataset.power = '';
@@ -439,11 +582,12 @@
 
       matches.forEach(index => {
         const tile = tiles[index];
-        tile.style.transform = 'scale(0)';
+        tile.classList.add('explode');
 
         setTimeout(() => {
           clearTile(index);
-        }, 150);
+          tile.classList.remove('explode');
+        }, 260);
       });
 
       result.specials.forEach(special => {
@@ -453,7 +597,9 @@
           if (tile.dataset.color !== '') {
             tile.dataset.power = special.type;
             tile.classList.add(special.type);
-            tile.textContent = special.type === 'rocket' ? '🚀' : '💣';
+            if (special.type === 'rocket') tile.textContent = '🚀';
+            if (special.type === 'bomb') tile.textContent = '💣';
+            if (special.type === 'disco') tile.textContent = '🌈';
           }
         }, 180);
       });
@@ -479,13 +625,11 @@
                   tiles[aboveIndex].dataset.power
                 );
 
-                tiles[index].animate([
-                  { transform: 'translateY(-40px)' },
-                  { transform: 'translateY(0)' }
-                ], {
-                  duration: 180,
-                  easing: 'ease-out'
-                });
+                tiles[index].classList.add('fall');
+
+                setTimeout(() => {
+                  tiles[index].classList.remove('fall');
+                }, 280);
 
                 clearTile(aboveIndex);
                 break;
@@ -505,13 +649,19 @@
 
           setTileData(tile, color);
 
-          tile.animate([
-            { transform: 'translateY(-120px)' },
-            { transform: 'translateY(0)' }
-          ], {
-            duration: 250,
-            easing: 'ease-out'
-          });
+          tile.style.opacity = '1';
+
+          tile.classList.add('fall');
+
+          setTimeout(() => {
+            tile.classList.remove('fall');
+          }, 300);
+
+          tile.classList.add('pop');
+
+          setTimeout(() => {
+            tile.classList.remove('pop');
+          }, 220);
         }
       });
 
@@ -522,6 +672,10 @@
 
     function clearTile(index) {
       const tile = tiles[index];
+
+      tile.textContent = '';
+      tile.classList.remove('rocket', 'bomb', 'disco');
+
       setTileData(tile, '', '');
       tile.style.opacity = '0';
     }
