@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Match-3 Mobile Game</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      touch-action: manipulation;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: linear-gradient(180deg, #1e3c72, #2a5298);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      overflow: hidden;
+      color: white;
+    }
+
+    .game-container {
+      width: 100%;
+      max-width: 480px;
+      padding: 12px;
+    }
+
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+      gap: 10px;
+    }
+
+    .panel {
+      background: rgba(255,255,255,0.15);
+      border-radius: 16px;
+      padding: 10px 14px;
+      backdrop-filter: blur(6px);
+      text-align: center;
+      flex: 1;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+
+    .panel h3 {
+      margin: 0;
+      font-size: 14px;
+      opacity: 0.8;
+    }
+
+    .panel p {
+      margin: 4px 0 0;
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    .board {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      gap: 5px;
+      background: rgba(255,255,255,0.15);
+      padding: 8px;
+      border-radius: 22px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+    }
+
+    .tile {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      border-radius: 18px;
+      transition: transform 0.15s ease, opacity 0.2s ease;
+      box-shadow: inset 0 -4px rgba(0,0,0,0.15);
+    }
+
+    .tile.selected {
+      transform: scale(0.88);
+      outline: 4px solid white;
+    }
+
+    .red { background: #ff4d4d; }
+    .blue { background: #4d88ff; }
+    .green { background: #4dff88; }
+    .yellow { background: #ffd24d; }
+    .purple { background: #bb66ff; }
+    .orange { background: #ff914d; }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    button {
+      flex: 1;
+      border: none;
+      border-radius: 16px;
+      padding: 14px;
+      font-size: 16px;
+      font-weight: bold;
+      background: white;
+      color: #2a5298;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      cursor: pointer;
+    }
+
+    .message {
+      margin-top: 12px;
+      text-align: center;
+      font-weight: bold;
+      min-height: 24px;
+    }
+
+    @media (max-width: 420px) {
+      .panel p {
+        font-size: 20px;
+      }
+
+      button {
+        font-size: 14px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="game-container">
+    <div class="top-bar">
+      <div class="panel">
+        <h3>Punkte</h3>
+        <p id="score">0</p>
+      </div>
+
+      <div class="panel">
+        <h3>Züge</h3>
+        <p id="moves">25</p>
+      </div>
+    </div>
+
+    <div class="board" id="board"></div>
+
+    <div class="controls">
+      <button onclick="restartGame()">Neu starten</button>
+    </div>
+
+    <div class="message" id="message"></div>
+  </div>
+
+  <script>
+    const board = document.getElementById('board');
+    const scoreEl = document.getElementById('score');
+    const movesEl = document.getElementById('moves');
+    const messageEl = document.getElementById('message');
+
+    const width = 8;
+    const colors = ['red', 'blue', 'green', 'yellow', 'purple', 'orange'];
+
+    let tiles = [];
+    let score = 0;
+    let moves = 25;
+    let selectedTile = null;
+    let busy = false;
+
+    function randomColor() {
+      return colors[Math.floor(Math.random() * colors.length)];
+    }
+
+    function createBoard() {
+      board.innerHTML = '';
+      tiles = [];
+
+      for (let i = 0; i < width * width; i++) {
+        const tile = document.createElement('div');
+        tile.classList.add('tile');
+
+        const color = randomColor();
+        tile.dataset.color = color;
+        tile.classList.add(color);
+        tile.dataset.id = i;
+
+        addTileEvents(tile);
+
+        board.appendChild(tile);
+        tiles.push(tile);
+      }
+
+      removeInitialMatches();
+    }
+
+    function addTileEvents(tile) {
+      tile.addEventListener('click', () => selectTile(tile));
+
+      tile.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        selectTile(tile);
+      }, { passive: false });
+    }
+
+    function selectTile(tile) {
+      if (busy || moves <= 0) return;
+
+      if (!selectedTile) {
+        selectedTile = tile;
+        tile.classList.add('selected');
+        return;
+      }
+
+      if (tile === selectedTile) {
+        tile.classList.remove('selected');
+        selectedTile = null;
+        return;
+      }
+
+      const id1 = Number(selectedTile.dataset.id);
+      const id2 = Number(tile.dataset.id);
+
+      const validMove = isAdjacent(id1, id2);
+
+      if (!validMove) {
+        selectedTile.classList.remove('selected');
+        selectedTile = tile;
+        tile.classList.add('selected');
+        return;
+      }
+
+      swapTiles(selectedTile, tile);
+
+      const matches = findMatches();
+
+      if (matches.length > 0) {
+        moves--;
+        updateUI();
+
+        selectedTile.classList.remove('selected');
+        selectedTile = null;
+
+        processMatches();
+      } else {
+        swapTiles(selectedTile, tile);
+
+        selectedTile.classList.remove('selected');
+        selectedTile = null;
+      }
+    }
+
+    function isAdjacent(a, b) {
+      const sameRow = Math.floor(a / width) === Math.floor(b / width);
+
+      return (
+        (sameRow && Math.abs(a - b) === 1) ||
+        Math.abs(a - b) === width
+      );
+    }
+
+    function swapTiles(tile1, tile2) {
+      const color1 = tile1.dataset.color;
+      const color2 = tile2.dataset.color;
+
+      tile1.classList.remove(color1);
+      tile2.classList.remove(color2);
+
+      tile1.classList.add(color2);
+      tile2.classList.add(color1);
+
+      tile1.dataset.color = color2;
+      tile2.dataset.color = color1;
+    }
+
+    function findMatches() {
+      let matches = [];
+
+      // Horizontal
+      for (let row = 0; row < width; row++) {
+        for (let col = 0; col < width - 2; col++) {
+          const index = row * width + col;
+          const color = tiles[index].dataset.color;
+
+          if (
+            color &&
+            tiles[index + 1].dataset.color === color &&
+            tiles[index + 2].dataset.color === color
+          ) {
+            matches.push(index, index + 1, index + 2);
+          }
+        }
+      }
+
+      // Vertical
+      for (let col = 0; col < width; col++) {
+        for (let row = 0; row < width - 2; row++) {
+          const index = row * width + col;
+          const color = tiles[index].dataset.color;
+
+          if (
+            color &&
+            tiles[index + width].dataset.color === color &&
+            tiles[index + width * 2].dataset.color === color
+          ) {
+            matches.push(index, index + width, index + width * 2);
+          }
+        }
+      }
+
+      return [...new Set(matches)];
+    }
+
+    function processMatches() {
+      busy = true;
+
+      const matches = findMatches();
+
+      if (matches.length === 0) {
+        busy = false;
+        checkGameOver();
+        return;
+      }
+
+      score += matches.length * 10;
+      updateUI();
+
+      matches.forEach(index => {
+        const tile = tiles[index];
+        tile.classList.remove(tile.dataset.color);
+        tile.dataset.color = '';
+        tile.style.opacity = '0';
+      });
+
+      setTimeout(() => {
+        dropTiles();
+        refillTiles();
+
+        setTimeout(() => {
+          processMatches();
+        }, 150);
+      }, 180);
+    }
+
+    function dropTiles() {
+      for (let col = 0; col < width; col++) {
+        for (let row = width - 1; row >= 0; row--) {
+          const index = row * width + col;
+
+          if (tiles[index].dataset.color === '') {
+            for (let above = row - 1; above >= 0; above--) {
+              const aboveIndex = above * width + col;
+
+              if (tiles[aboveIndex].dataset.color !== '') {
+                setTileColor(index, tiles[aboveIndex].dataset.color);
+                clearTile(aboveIndex);
+                break;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    function refillTiles() {
+      tiles.forEach(tile => {
+        if (tile.dataset.color === '') {
+          setTileColor(tile.dataset.id, randomColor());
+        }
+      });
+    }
+
+    function setTileColor(index, color) {
+      const tile = tiles[index];
+
+      tile.style.opacity = '1';
+      tile.dataset.color = color;
+
+      colors.forEach(c => tile.classList.remove(c));
+      tile.classList.add(color);
+    }
+
+    function clearTile(index) {
+      const tile = tiles[index];
+
+      colors.forEach(c => tile.classList.remove(c));
+      tile.dataset.color = '';
+      tile.style.opacity = '0';
+    }
+
+    function removeInitialMatches() {
+      while (findMatches().length > 0) {
+        findMatches().forEach(index => {
+          const tile = tiles[index];
+          const oldColor = tile.dataset.color;
+
+          let newColor = randomColor();
+
+          while (newColor === oldColor) {
+            newColor = randomColor();
+          }
+
+          tile.classList.remove(oldColor);
+          tile.classList.add(newColor);
+          tile.dataset.color = newColor;
+        });
+      }
+    }
+
+    function updateUI() {
+      scoreEl.textContent = score;
+      movesEl.textContent = moves;
+    }
+
+    function checkGameOver() {
+      if (moves <= 0) {
+        messageEl.textContent = `Spiel beendet! Punkte: ${score}`;
+      }
+    }
+
+    function restartGame() {
+      score = 0;
+      moves = 25;
+      selectedTile = null;
+      busy = false;
+      messageEl.textContent = '';
+
+      updateUI();
+      createBoard();
+    }
+
+    createBoard();
+    updateUI();
+  </script>
+</body>
+</html>
