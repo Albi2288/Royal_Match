@@ -178,9 +178,12 @@
         tile.classList.add('tile');
 
         const color = randomColor();
+
         tile.dataset.color = color;
-        tile.classList.add(color);
+        tile.dataset.power = '';
         tile.dataset.id = i;
+
+        tile.classList.add(color);
 
         addTileEvents(tile);
 
@@ -209,7 +212,7 @@
         return;
       }
 
-      if (tile === selectedTile) {
+      if (selectedTile === tile) {
         tile.classList.remove('selected');
         selectedTile = null;
         return;
@@ -218,33 +221,48 @@
       const id1 = Number(selectedTile.dataset.id);
       const id2 = Number(tile.dataset.id);
 
-      const validMove = isAdjacent(id1, id2);
-
-      if (!validMove) {
+      if (!isAdjacent(id1, id2)) {
         selectedTile.classList.remove('selected');
         selectedTile = tile;
         tile.classList.add('selected');
         return;
       }
 
-      swapTiles(selectedTile, tile);
+      animateSwap(selectedTile, tile);
+    }
 
-      const matches = findMatches();
+    function animateSwap(tile1, tile2) {
+      busy = true;
 
-      if (matches.length > 0) {
-        moves--;
-        updateUI();
+      tile1.style.transform = 'scale(0.9)';
+      tile2.style.transform = 'scale(0.9)';
 
-        selectedTile.classList.remove('selected');
+      setTimeout(() => {
+        swapTiles(tile1, tile2);
+
+        const matches = findMatches();
+
+        if (matches.length > 0 || tile1.dataset.power || tile2.dataset.power) {
+          moves--;
+          updateUI();
+
+          activatePower(tile1);
+          activatePower(tile2);
+
+          processMatches();
+        } else {
+          setTimeout(() => {
+            swapTiles(tile1, tile2);
+            tile1.style.transform = '';
+            tile2.style.transform = '';
+            busy = false;
+          }, 180);
+        }
+
+        tile1.classList.remove('selected');
+        tile2.classList.remove('selected');
         selectedTile = null;
-
-        processMatches();
-      } else {
-        swapTiles(selectedTile, tile);
-
-        selectedTile.classList.remove('selected');
-        selectedTile = null;
-      }
+      }, 140);
     }
 
     function isAdjacent(a, b) {
@@ -257,61 +275,158 @@
     }
 
     function swapTiles(tile1, tile2) {
-      const color1 = tile1.dataset.color;
-      const color2 = tile2.dataset.color;
+      const tempColor = tile1.dataset.color;
+      const tempPower = tile1.dataset.power;
 
-      tile1.classList.remove(color1);
-      tile2.classList.remove(color2);
+      setTileData(tile1, tile2.dataset.color, tile2.dataset.power);
+      setTileData(tile2, tempColor, tempPower);
+    }
 
-      tile1.classList.add(color2);
-      tile2.classList.add(color1);
+    function setTileData(tile, color, power='') {
+      colors.forEach(c => tile.classList.remove(c));
+      tile.classList.remove('rocket', 'bomb');
 
-      tile1.dataset.color = color2;
-      tile2.dataset.color = color1;
+      tile.dataset.color = color;
+      tile.dataset.power = power;
+
+      if (color) tile.classList.add(color);
+      if (power) tile.classList.add(power);
+
+      tile.textContent = '';
+
+      if (power === 'rocket') tile.textContent = '🚀';
+      if (power === 'bomb') tile.textContent = '💣';
     }
 
     function findMatches() {
       let matches = [];
+      let specials = [];
 
-      // Horizontal
       for (let row = 0; row < width; row++) {
-        for (let col = 0; col < width - 2; col++) {
-          const index = row * width + col;
-          const color = tiles[index].dataset.color;
+        let streak = 1;
 
-          if (
-            color &&
-            tiles[index + 1].dataset.color === color &&
-            tiles[index + 2].dataset.color === color
-          ) {
-            matches.push(index, index + 1, index + 2);
+        for (let col = 1; col < width; col++) {
+          const current = row * width + col;
+          const prev = row * width + col - 1;
+
+          if (tiles[current].dataset.color === tiles[prev].dataset.color) {
+            streak++;
+          } else {
+            if (streak >= 3) {
+              const start = current - streak;
+              const arr = [];
+
+              for (let i = 0; i < streak; i++) {
+                arr.push(start + i);
+              }
+
+              matches.push(...arr);
+
+              if (streak === 4) specials.push({ index: start + 1, type: 'rocket' });
+              if (streak >= 5) specials.push({ index: start + 2, type: 'bomb' });
+            }
+
+            streak = 1;
           }
+        }
+
+        if (streak >= 3) {
+          const start = row * width + width - streak;
+          const arr = [];
+
+          for (let i = 0; i < streak; i++) {
+            arr.push(start + i);
+          }
+
+          matches.push(...arr);
+
+          if (streak === 4) specials.push({ index: start + 1, type: 'rocket' });
+          if (streak >= 5) specials.push({ index: start + 2, type: 'bomb' });
         }
       }
 
-      // Vertical
       for (let col = 0; col < width; col++) {
-        for (let row = 0; row < width - 2; row++) {
-          const index = row * width + col;
-          const color = tiles[index].dataset.color;
+        let streak = 1;
 
-          if (
-            color &&
-            tiles[index + width].dataset.color === color &&
-            tiles[index + width * 2].dataset.color === color
-          ) {
-            matches.push(index, index + width, index + width * 2);
+        for (let row = 1; row < width; row++) {
+          const current = row * width + col;
+          const prev = (row - 1) * width + col;
+
+          if (tiles[current].dataset.color === tiles[prev].dataset.color) {
+            streak++;
+          } else {
+            if (streak >= 3) {
+              const start = current - streak * width;
+              const arr = [];
+
+              for (let i = 0; i < streak; i++) {
+                arr.push(start + i * width);
+              }
+
+              matches.push(...arr);
+
+              if (streak === 4) specials.push({ index: start + width, type: 'rocket' });
+              if (streak >= 5) specials.push({ index: start + width * 2, type: 'bomb' });
+            }
+
+            streak = 1;
+          }
+        }
+
+        if (streak >= 3) {
+          const start = (width - streak) * width + col;
+          const arr = [];
+
+          for (let i = 0; i < streak; i++) {
+            arr.push(start + i * width);
+          }
+
+          matches.push(...arr);
+
+          if (streak === 4) specials.push({ index: start + width, type: 'rocket' });
+          if (streak >= 5) specials.push({ index: start + width * 2, type: 'bomb' });
+        }
+      }
+
+      return {
+        matches: [...new Set(matches)],
+        specials
+      };
+    }
+
+    function activatePower(tile) {
+      const power = tile.dataset.power;
+      const index = Number(tile.dataset.id);
+
+      if (!power) return;
+
+      if (power === 'rocket') {
+        const row = Math.floor(index / width);
+
+        for (let col = 0; col < width; col++) {
+          clearTile(row * width + col);
+        }
+      }
+
+      if (power === 'bomb') {
+        const row = Math.floor(index / width);
+        const col = index % width;
+
+        for (let r = row - 1; r <= row + 1; r++) {
+          for (let c = col - 1; c <= col + 1; c++) {
+            if (r >= 0 && r < width && c >= 0 && c < width) {
+              clearTile(r * width + c);
+            }
           }
         }
       }
 
-      return [...new Set(matches)];
+      tile.dataset.power = '';
     }
 
     function processMatches() {
-      busy = true;
-
-      const matches = findMatches();
+      const result = findMatches();
+      const matches = result.matches;
 
       if (matches.length === 0) {
         busy = false;
@@ -324,22 +439,31 @@
 
       matches.forEach(index => {
         const tile = tiles[index];
-        tile.classList.remove(tile.dataset.color);
-        tile.dataset.color = '';
-        tile.style.opacity = '0';
+        tile.style.transform = 'scale(0)';
+
+        setTimeout(() => {
+          clearTile(index);
+        }, 150);
+      });
+
+      result.specials.forEach(special => {
+        setTimeout(() => {
+          const tile = tiles[special.index];
+
+          if (tile.dataset.color !== '') {
+            tile.dataset.power = special.type;
+            tile.classList.add(special.type);
+            tile.textContent = special.type === 'rocket' ? '🚀' : '💣';
+          }
+        }, 180);
       });
 
       setTimeout(() => {
-        dropTiles();
-        refillTiles();
-
-        setTimeout(() => {
-          processMatches();
-        }, 150);
-      }, 180);
+        dropTilesAnimated();
+      }, 240);
     }
 
-    function dropTiles() {
+    function dropTilesAnimated() {
       for (let col = 0; col < width; col++) {
         for (let row = width - 1; row >= 0; row--) {
           const index = row * width + col;
@@ -349,7 +473,20 @@
               const aboveIndex = above * width + col;
 
               if (tiles[aboveIndex].dataset.color !== '') {
-                setTileColor(index, tiles[aboveIndex].dataset.color);
+                setTileData(
+                  tiles[index],
+                  tiles[aboveIndex].dataset.color,
+                  tiles[aboveIndex].dataset.power
+                );
+
+                tiles[index].animate([
+                  { transform: 'translateY(-40px)' },
+                  { transform: 'translateY(0)' }
+                ], {
+                  duration: 180,
+                  easing: 'ease-out'
+                });
+
                 clearTile(aboveIndex);
                 break;
               }
@@ -357,51 +494,47 @@
           }
         }
       }
+
+      refillTilesAnimated();
     }
 
-    function refillTiles() {
+    function refillTilesAnimated() {
       tiles.forEach(tile => {
         if (tile.dataset.color === '') {
-          setTileColor(tile.dataset.id, randomColor());
+          const color = randomColor();
+
+          setTileData(tile, color);
+
+          tile.animate([
+            { transform: 'translateY(-120px)' },
+            { transform: 'translateY(0)' }
+          ], {
+            duration: 250,
+            easing: 'ease-out'
+          });
         }
       });
-    }
 
-    function setTileColor(index, color) {
-      const tile = tiles[index];
-
-      tile.style.opacity = '1';
-      tile.dataset.color = color;
-
-      colors.forEach(c => tile.classList.remove(c));
-      tile.classList.add(color);
+      setTimeout(() => {
+        processMatches();
+      }, 280);
     }
 
     function clearTile(index) {
       const tile = tiles[index];
-
-      colors.forEach(c => tile.classList.remove(c));
-      tile.dataset.color = '';
+      setTileData(tile, '', '');
       tile.style.opacity = '0';
     }
 
     function removeInitialMatches() {
-      while (findMatches().length > 0) {
-        findMatches().forEach(index => {
+      while (findMatches().matches.length > 0) {
+        findMatches().matches.forEach(index => {
           const tile = tiles[index];
-          const oldColor = tile.dataset.color;
-
-          let newColor = randomColor();
-
-          while (newColor === oldColor) {
-            newColor = randomColor();
-          }
-
-          tile.classList.remove(oldColor);
-          tile.classList.add(newColor);
-          tile.dataset.color = newColor;
+          setTileData(tile, randomColor());
         });
       }
+
+      tiles.forEach(tile => tile.style.opacity = '1');
     }
 
     function updateUI() {
@@ -418,8 +551,8 @@
     function restartGame() {
       score = 0;
       moves = 25;
-      selectedTile = null;
       busy = false;
+      selectedTile = null;
       messageEl.textContent = '';
 
       updateUI();
