@@ -279,6 +279,7 @@ let tiles=[];
 let selected=null;
 let busy=false;
 let score=0;
+let moves=Infinity;
 
 function randomColor(){
   return colors[Math.floor(Math.random()*colors.length)];
@@ -319,6 +320,11 @@ function setTile(tile,color,power=''){
   if(power==='disco') tile.textContent='🌈';
 }
 
+function isValidMove(){
+  const res=findMatches();
+  return res.clear.length>0;
+}
+
 function handle(tile){
   if(busy) return;
 
@@ -352,15 +358,21 @@ function handle(tile){
   setTimeout(()=>{
     const res=findMatches();
 
-    if(res.length===0){
+    // INVALID MOVE -> SWAP BACK
+    if(res.clear.length===0){
       swap(a,b);
       busy=false;
       return;
     }
 
+    // valid move consumes one move
+    if(moves!==Infinity){
+      moves--;
+    }
+
     score+=res.clear.length*10;
     update();
-    explode(res);
+    explode(res.clear);
   },150);
 }
 
@@ -580,9 +592,26 @@ function explodeTile(i){
 
 function update(){
   scoreEl.textContent=score;
-  movesEl.textContent='∞';
+  movesEl.textContent=moves===Infinity ? '∞' : moves;
+
+  if(moves!==Infinity && moves<=0){
+    messageEl.textContent='Keine Züge mehr!';
+    busy=true;
+  }
 }
 
+function setupMoves(){
+  const input=prompt('Wie viele Züge möchtest du? Schreibe ∞ für unendlich.', '∞');
+
+  if(input==='∞' || input==='infinity' || input==='Infinity'){
+    moves=Infinity;
+  } else {
+    const parsed=parseInt(input);
+    moves=isNaN(parsed) ? Infinity : parsed;
+  }
+}
+
+setupMoves();
 createBoard();
 update();
 </script>
