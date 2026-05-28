@@ -107,10 +107,30 @@
     }
 
     .rocket {
-      border: 3px solid rgba(255,255,255,0.9);
-      box-shadow: 0 0 16px rgba(255,255,255,0.8);
+      background: linear-gradient(180deg, #dbeafe, #60a5fa);
+      border: 3px solid white;
+      box-shadow: 0 0 18px rgba(255,255,255,0.9);
       z-index: 2;
+      animation: pulse 1s infinite;
     }
+
+    .bomb {
+      background: linear-gradient(180deg, #fde68a, #f97316);
+      border: 3px solid white;
+      box-shadow: 0 0 18px rgba(255,180,80,0.9);
+      z-index: 2;
+      animation: wobble 1s infinite;
+    }
+
+    .disco {
+      background: linear-gradient(180deg, #ffffff, #d946ef);
+      border: 3px solid white;
+      box-shadow: 0 0 24px rgba(255,255,255,1);
+      z-index: 2;
+      animation: rainbow 1s linear infinite;
+    }
+
+    .rocket {
 
     .bomb {
       border: 3px solid rgba(255,255,255,0.9);
@@ -378,17 +398,28 @@ function setTile(tile, color, power='') {
   tile.dataset.color = color;
   tile.dataset.power = power;
 
-  if (color) tile.classList.add(color);
-
-  if (power) {
-    tile.classList.add(power);
-
-    if (power === 'rocket') tile.textContent = '🚀';
-    if (power === 'bomb') tile.textContent = '💣';
-    if (power === 'disco') tile.textContent = '🌈';
+  // Normale Tiles
+  if (!power && color) {
+    tile.classList.add(color);
   }
 
-  tile.style.opacity = color ? '1' : '0';
+  // Eigenständige Powerup-Icons
+  if (power === 'rocket') {
+    tile.classList.add('rocket');
+    tile.textContent = '🚀';
+  }
+
+  if (power === 'bomb') {
+    tile.classList.add('bomb');
+    tile.textContent = '💣';
+  }
+
+  if (power === 'disco') {
+    tile.classList.add('disco');
+    tile.textContent = '🌈';
+  }
+
+  tile.style.opacity = color || power ? '1' : '0';
 }
 
 function findMatches() {
@@ -633,10 +664,40 @@ function refillBoard() {
 }
 
 function activatePower(tile) {
-  busy = true;
-
-  const power = tile.dataset.power;
   const index = Number(tile.dataset.id);
+  const power = tile.dataset.power;
+
+  activateSpecificPower(index, power);
+
+  setTimeout(() => {
+    dropTiles();
+  }, 450);
+}
+
+function explodeTile(index) {
+  const tile = tiles[index];
+
+  // Kettenreaktion für Powerups
+  if (tile.dataset.power) {
+    const power = tile.dataset.power;
+
+    tile.dataset.power = '';
+
+    setTimeout(() => {
+      activateSpecificPower(index, power);
+    }, 80);
+  }
+
+  tile.classList.add('explode');
+
+  setTimeout(() => {
+    setTile(tile, '', '');
+    tile.classList.remove('explode');
+  }, 200);
+}
+
+function activateSpecificPower(index, power) {
+  const tile = tiles[index];
 
   if (power === 'rocket') {
     const row = Math.floor(index / width);
@@ -663,26 +724,12 @@ function activatePower(tile) {
     const target = randomColor();
 
     tiles.forEach((t, i) => {
-      if (t.dataset.color === target) {
-        setTimeout(() => explodeTile(i), i * 20);
+      if (t.dataset.color === target || t.dataset.power) {
+        setTimeout(() => explodeTile(i), i * 15);
       }
     });
   }
-
-  setTimeout(() => {
-    dropTiles();
-  }, 400);
-}
-
-function explodeTile(index) {
-  const tile = tiles[index];
-
-  tile.classList.add('explode');
-
-  setTimeout(() => {
-    setTile(tile, '', '');
-    tile.classList.remove('explode');
-  }, 200);
+}, 200);
 }
 
 function removeStartMatches() {
