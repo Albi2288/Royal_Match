@@ -282,29 +282,43 @@ function createBoard() {
 function selectTile(tile) {
   if (busy || moves <= 0) return;
 
+  // Powerups direkt aktivieren
   if (tile.dataset.power) {
+    busy = true;
     moves--;
     updateUI();
     activatePower(tile);
     return;
   }
 
+  // Erstes Tile auswählen
   if (!selectedTile) {
     selectedTile = tile;
     tile.classList.add('selected');
     return;
   }
 
-  const a = Number(selectedTile.dataset.id);
-  const b = Number(tile.dataset.id);
+  // Gleiches Tile erneut anklicken
+  if (selectedTile === tile) {
+    tile.classList.remove('selected');
+    selectedTile = null;
+    return;
+  }
 
-  if (!isAdjacent(a, b)) {
+  const firstIndex = Number(selectedTile.dataset.id);
+  const secondIndex = Number(tile.dataset.id);
+
+  // Nicht benachbart
+  if (!isAdjacent(firstIndex, secondIndex)) {
     selectedTile.classList.remove('selected');
     selectedTile = tile;
     tile.classList.add('selected');
     return;
   }
 
+  busy = true;
+
+  // Tauschen
   swapTiles(selectedTile, tile);
 
   selectedTile.classList.remove('selected');
@@ -313,19 +327,23 @@ function selectTile(tile) {
   setTimeout(() => {
     const result = findMatches();
 
+    // Kein gültiger Zug -> zurücktauschen
     if (result.matches.length === 0) {
-      swapTiles(tiles[a], tiles[b]);
+      swapTiles(tiles[firstIndex], tiles[secondIndex]);
+
+      setTimeout(() => {
+        busy = false;
+      }, 180);
+
       return;
     }
 
+    // Gültiger Zug
     moves--;
     updateUI();
     processMatches();
-  }, 140);
 
-  moves--;
-  updateUI();
-  processMatches();
+  }, 160);
 }
 
 function isAdjacent(a, b) {
