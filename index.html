@@ -377,6 +377,18 @@ function findMatches() {
   const matches = new Set();
   const specials = [];
 
+  function addMatch(indices, powerType = null, powerIndex = null) {
+    indices.forEach(i => matches.add(i));
+
+    if (powerType && powerIndex !== null) {
+      specials.push({
+        index: powerIndex,
+        type: powerType
+      });
+    }
+  }
+
+  // Horizontale Reihen
   for (let row = 0; row < width; row++) {
     let streak = 1;
 
@@ -384,17 +396,50 @@ function findMatches() {
       const current = row * width + col;
       const prev = current - 1;
 
-      if (tiles[current].dataset.color === tiles[prev].dataset.color) {
+      if (
+        tiles[current].dataset.color !== '' &&
+        tiles[current].dataset.color === tiles[prev].dataset.color
+      ) {
         streak++;
       } else {
-        evaluateStreak(current - streak, streak, 1);
+        if (streak >= 3) {
+          const start = current - streak;
+          const group = [];
+
+          for (let i = 0; i < streak; i++) {
+            group.push(start + i);
+          }
+
+          let power = null;
+          if (streak === 4) power = 'rocket';
+          if (streak === 5) power = 'bomb';
+          if (streak >= 6) power = 'disco';
+
+          addMatch(group, power, group[Math.floor(group.length / 2)]);
+        }
+
         streak = 1;
       }
     }
 
-    evaluateStreak(row * width + width - streak, streak, 1);
+    if (streak >= 3) {
+      const start = row * width + width - streak;
+      const group = [];
+
+      for (let i = 0; i < streak; i++) {
+        group.push(start + i);
+      }
+
+      let power = null;
+      if (streak === 4) power = 'rocket';
+      if (streak === 5) power = 'bomb';
+      if (streak >= 6) power = 'disco';
+
+      addMatch(group, power, group[Math.floor(group.length / 2)]);
+    }
   }
 
+  // Vertikale Reihen
   for (let col = 0; col < width; col++) {
     let streak = 1;
 
@@ -402,31 +447,68 @@ function findMatches() {
       const current = row * width + col;
       const prev = current - width;
 
-      if (tiles[current].dataset.color === tiles[prev].dataset.color) {
+      if (
+        tiles[current].dataset.color !== '' &&
+        tiles[current].dataset.color === tiles[prev].dataset.color
+      ) {
         streak++;
       } else {
-        evaluateStreak(current - streak * width, streak, width);
+        if (streak >= 3) {
+          const start = current - streak * width;
+          const group = [];
+
+          for (let i = 0; i < streak; i++) {
+            group.push(start + i * width);
+          }
+
+          let power = null;
+          if (streak === 4) power = 'rocket';
+          if (streak === 5) power = 'bomb';
+          if (streak >= 6) power = 'disco';
+
+          addMatch(group, power, group[Math.floor(group.length / 2)]);
+        }
+
         streak = 1;
       }
     }
 
-    evaluateStreak((width - streak) * width + col, streak, width);
+    if (streak >= 3) {
+      const start = (width - streak) * width + col;
+      const group = [];
+
+      for (let i = 0; i < streak; i++) {
+        group.push(start + i * width);
+      }
+
+      let power = null;
+      if (streak === 4) power = 'rocket';
+      if (streak === 5) power = 'bomb';
+      if (streak >= 6) power = 'disco';
+
+      addMatch(group, power, group[Math.floor(group.length / 2)]);
+    }
   }
 
-  function evaluateStreak(start, streak, step) {
-    if (streak < 3) return;
+  // 2x2 Block Prüfung
+  for (let row = 0; row < width - 1; row++) {
+    for (let col = 0; col < width - 1; col++) {
+      const a = row * width + col;
+      const b = a + 1;
+      const c = a + width;
+      const d = c + 1;
 
-    const group = [];
+      const color = tiles[a].dataset.color;
 
-    for (let i = 0; i < streak; i++) {
-      const idx = start + i * step;
-      matches.add(idx);
-      group.push(idx);
+      if (
+        color !== '' &&
+        tiles[b].dataset.color === color &&
+        tiles[c].dataset.color === color &&
+        tiles[d].dataset.color === color
+      ) {
+        addMatch([a, b, c, d], 'bomb', a);
+      }
     }
-
-    if (streak === 4) specials.push({ index: group[1], type: 'rocket' });
-    if (streak === 5) specials.push({ index: group[2], type: 'bomb' });
-    if (streak >= 6) specials.push({ index: group[2], type: 'disco' });
   }
 
   return {
@@ -460,8 +542,17 @@ function processMatches() {
 
   result.specials.forEach(s => {
     setTimeout(() => {
-      if (tiles[s.index].dataset.color !== '') {
-        setTile(tiles[s.index], tiles[s.index].dataset.color, s.type);
+      const tile = tiles[s.index];
+
+      if (tile) {
+        const color = tile.dataset.color || randomColor();
+        setTile(tile, color, s.type);
+
+        tile.classList.add('pop');
+
+        setTimeout(() => {
+          tile.classList.remove('pop');
+        }, 240);
       }
     }, 260);
   });
