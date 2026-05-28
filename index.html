@@ -131,28 +131,26 @@
     }
 
     .rocket {
-
-    .bomb {
-      border: 3px solid rgba(255,255,255,0.9);
-      box-shadow: 0 0 18px rgba(255,180,80,0.8);
-      z-index: 2;
-    }
-
-    .disco {
+      background: linear-gradient(180deg, #dbeafe, #60a5fa);
       border: 3px solid white;
-      box-shadow: 0 0 22px rgba(255,255,255,1);
+      box-shadow: 0 0 18px rgba(255,255,255,0.9);
       z-index: 2;
-    }
-
-    .rocket {
       animation: pulse 1s infinite;
     }
 
     .bomb {
+      background: linear-gradient(180deg, #fde68a, #f97316);
+      border: 3px solid white;
+      box-shadow: 0 0 18px rgba(255,180,80,0.9);
+      z-index: 2;
       animation: wobble 1s infinite;
     }
 
     .disco {
+      background: linear-gradient(180deg, #ffffff, #d946ef);
+      border: 3px solid white;
+      box-shadow: 0 0 24px rgba(255,255,255,1);
+      z-index: 2;
       animation: rainbow 1s linear infinite;
     }
 
@@ -261,436 +259,427 @@
   </div>
 
   <script>
-const board = document.getElementById('board');
-const scoreEl = document.getElementById('score');
-const movesEl = document.getElementById('moves');
-const messageEl = document.getElementById('message');
+(() => {
+  const board = document.getElementById('board');
+  const scoreEl = document.getElementById('score');
+  const movesEl = document.getElementById('moves');
+  const messageEl = document.getElementById('message');
 
-const width = 8;
-const colors = ['red','blue','green','yellow','purple','orange'];
+  const width = 8;
+  const colors = ['red', 'blue', 'green', 'yellow', 'purple', 'orange'];
 
-let tiles = [];
-let selected = null;
-let busy = false;
-let score = 0;
-let moves = 25;
+  let tiles = [];
+  let selectedTile = null;
+  let busy = false;
+  let score = 0;
+  let moves = 25;
 
-function randomColor() {
-  return colors[Math.floor(Math.random() * colors.length)];
-}
-
-function createBoard() {
-  board.innerHTML = '';
-  tiles = [];
-
-  for (let i = 0; i < width * width; i++) {
-    const tile = document.createElement('div');
-    tile.className = 'tile';
-    tile.dataset.id = i;
-
-    setTile(tile, randomColor(), '');
-
-    tile.addEventListener('click', () => handleTileClick(tile));
-
-    board.appendChild(tile);
-    tiles.push(tile);
+  function randomColor() {
+    return colors[Math.floor(Math.random() * colors.length)];
   }
 
-  removeStartingMatches();
-}
+  function setTile(tile, color = '', power = '') {
+    colors.forEach(c => tile.classList.remove(c));
+    tile.classList.remove('rocket', 'bomb', 'disco', 'selected', 'explode', 'fall');
 
-function setTile(tile, color, power='') {
-  colors.forEach(c => tile.classList.remove(c));
-  tile.classList.remove('rocket','bomb','disco');
+    tile.dataset.color = color;
+    tile.dataset.power = power;
+    tile.textContent = '';
 
-  tile.dataset.color = color || '';
-  tile.dataset.power = power || '';
+    if (power === '') {
+      if (color) tile.classList.add(color);
+    }
 
-  tile.textContent = '';
+    if (power === 'rocket') {
+      tile.classList.add('rocket');
+      tile.textContent = '🚀';
+    }
 
-  if (power === '') {
-    if (color) tile.classList.add(color);
+    if (power === 'bomb') {
+      tile.classList.add('bomb');
+      tile.textContent = '💣';
+    }
+
+    if (power === 'disco') {
+      tile.classList.add('disco');
+      tile.textContent = '🌈';
+    }
+
+    tile.style.opacity = color || power ? '1' : '0';
   }
 
-  if (power === 'rocket') {
-    tile.classList.add('rocket');
-    tile.textContent = '🚀';
+  function createBoard() {
+    board.innerHTML = '';
+    tiles = [];
+
+    for (let i = 0; i < width * width; i++) {
+      const tile = document.createElement('div');
+      tile.className = 'tile';
+      tile.dataset.id = i;
+
+      setTile(tile, randomColor());
+
+      tile.addEventListener('click', () => onTileClick(tile));
+
+      board.appendChild(tile);
+      tiles.push(tile);
+    }
+
+    removeInitialMatches();
   }
 
-  if (power === 'bomb') {
-    tile.classList.add('bomb');
-    tile.textContent = '💣';
+  function removeInitialMatches() {
+    let result = findMatches();
+
+    while (result.matches.length > 0) {
+      result.matches.forEach(index => {
+        setTile(tiles[index], randomColor());
+      });
+
+      result = findMatches();
+    }
   }
 
-  if (power === 'disco') {
-    tile.classList.add('disco');
-    tile.textContent = '🌈';
-  }
+  function onTileClick(tile) {
+    if (busy || moves <= 0) return;
 
-  tile.style.opacity = color || power ? '1' : '0';
-}
+    if (tile.dataset.power) {
+      busy = true;
+      moves--;
+      updateUI();
 
-function handleTileClick(tile) {
-  if (busy || moves <= 0) return;
-
-  // Powerups direkt aktivieren
-  if (tile.dataset.power) {
-    busy = true;
-    moves--;
-    updateUI();
-
-    activatePower(Number(tile.dataset.id), tile.dataset.power);
-
-    setTimeout(() => {
-      dropTiles();
-    }, 300);
-
-    return;
-  }
-
-  if (!selected) {
-    selected = tile;
-    tile.classList.add('selected');
-    return;
-  }
-
-  if (selected === tile) {
-    tile.classList.remove('selected');
-    selected = null;
-    return;
-  }
-
-  const a = Number(selected.dataset.id);
-  const b = Number(tile.dataset.id);
-
-  if (!isAdjacent(a, b)) {
-    selected.classList.remove('selected');
-    selected = tile;
-    tile.classList.add('selected');
-    return;
-  }
-
-  busy = true;
-
-  swapTiles(a, b);
-
-  selected.classList.remove('selected');
-  selected = null;
-
-  setTimeout(() => {
-    const result = findMatches();
-
-    if (result.matches.length === 0) {
-      swapTiles(a, b);
+      triggerPower(Number(tile.dataset.id), tile.dataset.power);
 
       setTimeout(() => {
-        busy = false;
-      }, 180);
+        collapseBoard();
+      }, 300);
 
       return;
     }
 
-    moves--;
+    if (!selectedTile) {
+      selectedTile = tile;
+      tile.classList.add('selected');
+      return;
+    }
+
+    if (selectedTile === tile) {
+      tile.classList.remove('selected');
+      selectedTile = null;
+      return;
+    }
+
+    const a = Number(selectedTile.dataset.id);
+    const b = Number(tile.dataset.id);
+
+    if (!isAdjacent(a, b)) {
+      selectedTile.classList.remove('selected');
+      selectedTile = tile;
+      tile.classList.add('selected');
+      return;
+    }
+
+    busy = true;
+
+    swapTiles(a, b);
+
+    selectedTile.classList.remove('selected');
+    selectedTile = null;
+
+    setTimeout(() => {
+      const result = findMatches();
+
+      if (result.matches.length === 0) {
+        swapTiles(a, b);
+
+        setTimeout(() => {
+          busy = false;
+        }, 150);
+
+        return;
+      }
+
+      moves--;
+      updateUI();
+      processMatches();
+    }, 160);
+  }
+
+  function swapTiles(a, b) {
+    const tileA = tiles[a];
+    const tileB = tiles[b];
+
+    const dataA = {
+      color: tileA.dataset.color,
+      power: tileA.dataset.power
+    };
+
+    setTile(tileA, tileB.dataset.color, tileB.dataset.power);
+    setTile(tileB, dataA.color, dataA.power);
+
+    tileA.classList.add('pop');
+    tileB.classList.add('pop');
+
+    setTimeout(() => {
+      tileA.classList.remove('pop');
+      tileB.classList.remove('pop');
+    }, 150);
+  }
+
+  function isAdjacent(a, b) {
+    const sameRow = Math.floor(a / width) === Math.floor(b / width);
+
+    return (
+      (sameRow && Math.abs(a - b) === 1) ||
+      Math.abs(a - b) === width
+    );
+  }
+
+  function findMatches() {
+    const matches = new Set();
+    const powers = [];
+
+    function addPower(type, index) {
+      powers.push({ type, index });
+    }
+
+    for (let row = 0; row < width; row++) {
+      let streak = 1;
+
+      for (let col = 1; col < width; col++) {
+        const current = row * width + col;
+        const prev = current - 1;
+
+        if (
+          tiles[current].dataset.color &&
+          tiles[current].dataset.color === tiles[prev].dataset.color
+        ) {
+          streak++;
+        } else {
+          evaluateMatch(current - streak, streak, 1);
+          streak = 1;
+        }
+      }
+
+      evaluateMatch(row * width + width - streak, streak, 1);
+    }
+
+    for (let col = 0; col < width; col++) {
+      let streak = 1;
+
+      for (let row = 1; row < width; row++) {
+        const current = row * width + col;
+        const prev = current - width;
+
+        if (
+          tiles[current].dataset.color &&
+          tiles[current].dataset.color === tiles[prev].dataset.color
+        ) {
+          streak++;
+        } else {
+          evaluateMatch(current - streak * width, streak, width);
+          streak = 1;
+        }
+      }
+
+      evaluateMatch((width - streak) * width + col, streak, width);
+    }
+
+    for (let row = 0; row < width - 1; row++) {
+      for (let col = 0; col < width - 1; col++) {
+        const a = row * width + col;
+        const b = a + 1;
+        const c = a + width;
+        const d = c + 1;
+
+        const color = tiles[a].dataset.color;
+
+        if (
+          color &&
+          tiles[b].dataset.color === color &&
+          tiles[c].dataset.color === color &&
+          tiles[d].dataset.color === color
+        ) {
+          [a, b, c, d].forEach(i => matches.add(i));
+          addPower('bomb', a);
+        }
+      }
+    }
+
+    function evaluateMatch(start, streak, step) {
+      if (streak < 3) return;
+
+      const arr = [];
+
+      for (let i = 0; i < streak; i++) {
+        const index = start + i * step;
+        arr.push(index);
+        matches.add(index);
+      }
+
+      if (streak === 4) addPower('rocket', arr[1]);
+      if (streak === 5) addPower('bomb', arr[2]);
+      if (streak >= 6) addPower('disco', arr[2]);
+    }
+
+    return {
+      matches: [...matches],
+      powers
+    };
+  }
+
+  function processMatches() {
+    const result = findMatches();
+
+    if (result.matches.length === 0) {
+      busy = false;
+      return;
+    }
+
+    score += result.matches.length * 10;
     updateUI();
-    processBoard();
 
-  }, 180);
-}
-
-function swapTiles(a, b) {
-  const tileA = tiles[a];
-  const tileB = tiles[b];
-
-  const dataA = {
-    color: tileA.dataset.color,
-    power: tileA.dataset.power
-  };
-
-  setTile(tileA, tileB.dataset.color, tileB.dataset.power);
-  setTile(tileB, dataA.color, dataA.power);
-
-  tileA.classList.add('pop');
-  tileB.classList.add('pop');
-
-  setTimeout(() => {
-    tileA.classList.remove('pop');
-    tileB.classList.remove('pop');
-  }, 180);
-}
-
-function isAdjacent(a, b) {
-  const sameRow = Math.floor(a / width) === Math.floor(b / width);
-
-  return (
-    (sameRow && Math.abs(a - b) === 1) ||
-    Math.abs(a - b) === width
-  );
-}
-
-function findMatches() {
-  const matches = new Set();
-  const powers = [];
-
-  // Horizontal
-  for (let row = 0; row < width; row++) {
-    let streak = 1;
-
-    for (let col = 1; col < width; col++) {
-      const current = row * width + col;
-      const prev = current - 1;
-
-      if (
-        tiles[current].dataset.color !== '' &&
-        tiles[current].dataset.color === tiles[prev].dataset.color
-      ) {
-        streak++;
-      } else {
-        checkStreak(current - streak, streak, 1);
-        streak = 1;
-      }
-    }
-
-    checkStreak(row * width + width - streak, streak, 1);
-  }
-
-  // Vertical
-  for (let col = 0; col < width; col++) {
-    let streak = 1;
-
-    for (let row = 1; row < width; row++) {
-      const current = row * width + col;
-      const prev = current - width;
-
-      if (
-        tiles[current].dataset.color !== '' &&
-        tiles[current].dataset.color === tiles[prev].dataset.color
-      ) {
-        streak++;
-      } else {
-        checkStreak(current - streak * width, streak, width);
-        streak = 1;
-      }
-    }
-
-    checkStreak((width - streak) * width + col, streak, width);
-  }
-
-  // 2x2 Block
-  for (let row = 0; row < width - 1; row++) {
-    for (let col = 0; col < width - 1; col++) {
-      const a = row * width + col;
-      const b = a + 1;
-      const c = a + width;
-      const d = c + 1;
-
-      const color = tiles[a].dataset.color;
-
-      if (
-        color &&
-        tiles[b].dataset.color === color &&
-        tiles[c].dataset.color === color &&
-        tiles[d].dataset.color === color
-      ) {
-        [a,b,c,d].forEach(i => matches.add(i));
-        powers.push({ index: a, type: 'bomb' });
-      }
-    }
-  }
-
-  function checkStreak(start, streak, step) {
-    if (streak < 3) return;
-
-    const arr = [];
-
-    for (let i = 0; i < streak; i++) {
-      const idx = start + i * step;
-      arr.push(idx);
-      matches.add(idx);
-    }
-
-    if (streak === 4) {
-      powers.push({ index: arr[1], type: 'rocket' });
-    }
-
-    if (streak === 5) {
-      powers.push({ index: arr[2], type: 'bomb' });
-    }
-
-    if (streak >= 6) {
-      powers.push({ index: arr[2], type: 'disco' });
-    }
-  }
-
-  return {
-    matches: [...matches],
-    powers
-  };
-}
-
-function processBoard() {
-  const result = findMatches();
-
-  if (result.matches.length === 0) {
-    busy = false;
-    return;
-  }
-
-  score += result.matches.length * 10;
-  updateUI();
-
-  result.matches.forEach(i => {
-    tiles[i].classList.add('explode');
-  });
-
-  setTimeout(() => {
-    result.matches.forEach(i => {
-      setTile(tiles[i], '', '');
-      tiles[i].classList.remove('explode');
+    result.matches.forEach(index => {
+      tiles[index].classList.add('explode');
     });
 
-    result.powers.forEach(p => {
-      setTile(tiles[p.index], randomColor(), p.type);
-    });
+    setTimeout(() => {
+      result.matches.forEach(index => {
+        setTile(tiles[index]);
+      });
 
-    dropTiles();
+      result.powers.forEach(power => {
+        const tile = tiles[power.index];
+        setTile(tile, randomColor(), power.type);
+      });
 
-  }, 220);
-}
+      collapseBoard();
+    }, 220);
+  }
 
-function dropTiles() {
-  for (let col = 0; col < width; col++) {
-    for (let row = width - 1; row >= 0; row--) {
-      const index = row * width + col;
+  function collapseBoard() {
+    for (let col = 0; col < width; col++) {
+      for (let row = width - 1; row >= 0; row--) {
+        const index = row * width + col;
 
-      if (tiles[index].dataset.color === '' && tiles[index].dataset.power === '') {
+        if (!tiles[index].dataset.color && !tiles[index].dataset.power) {
+          for (let above = row - 1; above >= 0; above--) {
+            const aboveIndex = above * width + col;
 
-        for (let above = row - 1; above >= 0; above--) {
-          const aboveIndex = above * width + col;
+            if (tiles[aboveIndex].dataset.color || tiles[aboveIndex].dataset.power) {
+              setTile(
+                tiles[index],
+                tiles[aboveIndex].dataset.color,
+                tiles[aboveIndex].dataset.power
+              );
 
-          if (
-            tiles[aboveIndex].dataset.color !== '' ||
-            tiles[aboveIndex].dataset.power !== ''
-          ) {
-            setTile(
-              tiles[index],
-              tiles[aboveIndex].dataset.color,
-              tiles[aboveIndex].dataset.power
-            );
+              tiles[index].classList.add('fall');
 
-            setTile(tiles[aboveIndex], '', '');
-
-            tiles[index].classList.add('fall');
-            break;
+              setTile(tiles[aboveIndex]);
+              break;
+            }
           }
         }
       }
     }
+
+    refillBoard();
   }
 
-  refillBoard();
-}
-
-function refillBoard() {
-  for (let i = 0; i < tiles.length; i++) {
-    if (tiles[i].dataset.color === '' && tiles[i].dataset.power === '') {
-      setTile(tiles[i], randomColor(), '');
-      tiles[i].classList.add('fall');
+  function refillBoard() {
+    for (let i = 0; i < tiles.length; i++) {
+      if (!tiles[i].dataset.color && !tiles[i].dataset.power) {
+        setTile(tiles[i], randomColor());
+        tiles[i].classList.add('fall');
+      }
     }
+
+    setTimeout(() => {
+      tiles.forEach(tile => tile.classList.remove('fall'));
+
+      const result = findMatches();
+
+      if (result.matches.length > 0) {
+        processMatches();
+      } else {
+        busy = false;
+      }
+    }, 250);
   }
 
-  setTimeout(() => {
-    tiles.forEach(t => t.classList.remove('fall'));
+  function explodeTile(index) {
+    const tile = tiles[index];
 
-    if (findMatches().matches.length > 0) {
-      processBoard();
-    } else {
-      busy = false;
-    }
-  }, 260);
-}
+    const power = tile.dataset.power;
 
-function activatePower(index, power) {
-  if (power === 'rocket') {
-    const row = Math.floor(index / width);
+    tile.classList.add('explode');
 
-    for (let col = 0; col < width; col++) {
-      explodeTile(row * width + col);
-    }
+    setTimeout(() => {
+      setTile(tile);
+
+      if (power) {
+        triggerPower(index, power);
+      }
+    }, 180);
   }
 
-  if (power === 'bomb') {
-    const row = Math.floor(index / width);
-    const col = index % width;
+  function triggerPower(index, power) {
+    if (power === 'rocket') {
+      const row = Math.floor(index / width);
 
-    for (let r = row - 1; r <= row + 1; r++) {
-      for (let c = col - 1; c <= col + 1; c++) {
-        if (r >= 0 && r < width && c >= 0 && c < width) {
-          explodeTile(r * width + c);
+      for (let col = 0; col < width; col++) {
+        explodeTile(row * width + col);
+      }
+    }
+
+    if (power === 'bomb') {
+      const row = Math.floor(index / width);
+      const col = index % width;
+
+      for (let r = row - 1; r <= row + 1; r++) {
+        for (let c = col - 1; c <= col + 1; c++) {
+          if (r >= 0 && r < width && c >= 0 && c < width) {
+            explodeTile(r * width + c);
+          }
         }
       }
     }
-  }
 
-  if (power === 'disco') {
-    const target = randomColor();
+    if (power === 'disco') {
+      const target = randomColor();
 
-    tiles.forEach((tile, i) => {
-      if (tile.dataset.color === target || tile.dataset.power) {
-        explodeTile(i);
-      }
-    });
-  }
-}
-
-function explodeTile(index) {
-  const tile = tiles[index];
-
-  const power = tile.dataset.power;
-
-  tile.classList.add('explode');
-
-  setTimeout(() => {
-
-    if (power) {
-      tile.dataset.power = '';
-      activatePower(index, power);
+      tiles.forEach((tile, i) => {
+        if (tile.dataset.color === target || tile.dataset.power) {
+          explodeTile(i);
+        }
+      });
     }
-
-    setTile(tile, '', '');
-    tile.classList.remove('explode');
-
-  }, 180);
-}
-
-function removeStartingMatches() {
-  while (findMatches().matches.length > 0) {
-    findMatches().matches.forEach(i => {
-      setTile(tiles[i], randomColor(), '');
-    });
   }
-}
 
-function updateUI() {
-  scoreEl.textContent = score;
-  movesEl.textContent = moves;
+  function updateUI() {
+    scoreEl.textContent = score;
+    movesEl.textContent = moves;
 
-  if (moves <= 0) {
-    messageEl.textContent = 'Spiel beendet!';
+    if (moves <= 0) {
+      messageEl.textContent = 'Spiel beendet!';
+    } else {
+      messageEl.textContent = '';
+    }
   }
-}
 
-function restartGame() {
-  selected = null;
-  busy = false;
-  score = 0;
-  moves = 25;
+  window.restartGame = function () {
+    selectedTile = null;
+    busy = false;
+    score = 0;
+    moves = 25;
 
-  updateUI();
+    updateUI();
+    createBoard();
+  };
+
   createBoard();
-}
-
-createBoard();
-updateUI();
+  updateUI();
+})();
 </script>
 </body>
 </html>
