@@ -310,14 +310,18 @@ function selectTile(tile) {
   selectedTile.classList.remove('selected');
   selectedTile = null;
 
-  const result = findMatches();
+  setTimeout(() => {
+    const result = findMatches();
 
-  if (result.matches.length === 0) {
-    setTimeout(() => {
+    if (result.matches.length === 0) {
       swapTiles(tiles[a], tiles[b]);
-    }, 180);
-    return;
-  }
+      return;
+    }
+
+    moves--;
+    updateUI();
+    processMatches();
+  }, 140);
 
   moves--;
   updateUI();
@@ -330,21 +334,21 @@ function isAdjacent(a, b) {
 }
 
 function swapTiles(tile1, tile2) {
+  const c1 = tile1.dataset.color;
+  const c2 = tile2.dataset.color;
+  const p1 = tile1.dataset.power;
+  const p2 = tile2.dataset.power;
+
   tile1.style.transform = 'scale(0.85)';
   tile2.style.transform = 'scale(0.85)';
 
+  setTile(tile1, c2, p2);
+  setTile(tile2, c1, p1);
+
   setTimeout(() => {
-    const c1 = tile1.dataset.color;
-    const c2 = tile2.dataset.color;
-    const p1 = tile1.dataset.power;
-    const p2 = tile2.dataset.power;
-
-    setTile(tile1, c2, p2);
-    setTile(tile2, c1, p1);
-
     tile1.style.transform = '';
     tile2.style.transform = '';
-  }, 100);
+  }, 120);
 }
 
 function setTile(tile, color, power='') {
